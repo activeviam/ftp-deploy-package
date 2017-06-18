@@ -1,0 +1,54 @@
+{
+  "bin": "./bin.js",
+  "bugs": {
+    "url": "https://github.com/activeviam/ftp-deploy-package/issues"
+  },
+  "description": "Deploy an npm package with its production dependencies through FTP",
+  "dependencies": {
+    "es6-promisify": "^5.0.0",
+    "execa": "^0.7.0",
+    "fs-extra": "^3.0.1",
+    "ftp": "^0.3.10",
+    "node-progress": "^0.1.0",
+    "prompt": "^1.0.0",
+    "recursive-readdir": "^2.2.1",
+    "yargs": "^8.0.2"
+  },
+  "devDependencies": {
+    "dotenv": "^4.0.0",
+    "eslint": "^4.0.0",
+    "eslint-config-prettier": "^2.1.1",
+    "eslint-plugin-prettier": "^2.1.2",
+    "jest": "^20.0.4",
+    "pre-commit": "^1.2.2",
+    "prettier": "^1.4.4"
+  },
+  "engines": {
+    "node": ">= 6.10.2"
+  },
+  "files": [
+    "bin.js",
+    "index.js"
+  ],
+  "keywords": [
+    "node",
+    "ftp",
+    "deploy",
+    "package"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "name": "ftp-deploy-package",
+  "pre-commit": [
+    "eslint"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/activeviam/ftp-deploy-package"
+  },
+  "scripts": {
+    "eslint": "eslint --fix .",
+    "test": "jest"
+  },
+  "version": "0.1.0"
+}
