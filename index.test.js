@@ -65,8 +65,8 @@ test(
       )
       .then(() =>
         ftpDeployPackage(packageMockDirectory, ftpConfig, {
-          beforeClosingConnection: ftpClient =>
-            ftpClient
+          beforeClosingConnection(ftpClient) {
+            return ftpClient
               .get('index.js')
               .then(
                 readableStream =>
@@ -87,9 +87,14 @@ test(
               .then(list => list.map(({name}) => name))
               .then(names => {
                 expect(names).toContain('package.json');
-              }),
-          onFileUploaded: filePath => console.log(`${filePath} uploaded`),
-          onStatusUpdate: status => console.log(`status: ${status}`),
+              });
+          },
+          onFileUploaded(filePath) {
+            console.log(`${filePath} uploaded`);
+          },
+          onStatusUpdate(status) {
+            console.log(`status: ${status}`);
+          },
         })
       )
       .then(() => fse.remove(packageMockDirectory)),
