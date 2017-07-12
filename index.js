@@ -60,15 +60,18 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
 
   const getFilesToUpload = copySourceFilesToDeploymentDirectory.then(
     ({directory: packageDeploymentDirectory, filePaths: sourceFilePaths}) => {
+      const nodeModulesPath = path.join(
+        packageDeploymentDirectory,
+        'node_modules'
+      );
+
       updateStatus('installing npm dependencies');
+
       return execa('npm', ['install', '--production', '--no-package-lock'], {
         cwd: packageDeploymentDirectory,
       })
-        .then(() =>
-          recursiveReadDir(
-            path.join(packageDeploymentDirectory, 'node_modules')
-          )
-        )
+        .then(() => fse.ensureDir(nodeModulesPath))
+        .then(() => recursiveReadDir(nodeModulesPath))
         .then(nodeModulesFiles =>
           nodeModulesFiles
             // eslint-disable-next-line no-sync
