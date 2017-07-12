@@ -7,6 +7,10 @@ const promisify = require('es6-promisify');
 const ProgressBar = require('progress');
 const prompt = require('prompt');
 const {argv} = require('yargs').options({
+  debug: {
+    default: false,
+    describe: 'enable debug mode of node-ftp',
+  },
   host: {
     demandOption: true,
     describe: 'hostname without the protocol prefix',
@@ -19,6 +23,9 @@ const {argv} = require('yargs').options({
     demandOption: true,
   },
 });
+if (argv.debug) {
+  argv.debug = console.log.bind(console);
+}
 
 const ftpDeployPackage = require('.');
 
@@ -46,13 +53,27 @@ promptPassword().then(password => {
 
   console.log(`deploying to ${argv.user}@${argv.host}:${argv.path}`);
   return ftpDeployPackage(packageDirectory, Object.assign({password}, argv), {
+    beforeDirectoriesCreation(ftpClient, directoriesToCreate) {
+      progressBar = new ProgressBar(
+        '[:bar] :current/:total directories created',
+        {
+          total: directoriesToCreate.length,
+        }
+      );
+      return Promise.resolve();
+    },
     beforeUpload(ftpClient, filesToUpload) {
       progressBar = new ProgressBar('[:bar] :current/:total files uploaded', {
         total: filesToUpload.length,
       });
       return Promise.resolve();
     },
-    onFileUploaded() {
+    onDirectoryCreated(directoryPath) {
+      progressBar.interrupt(`created directory ${directoryPath}`);
+      progressBar.tick();
+    },
+    onFileUploaded(filePath) {
+      progressBar.interrupt(`uploaded file ${filePath}`);
       progressBar.tick();
     },
     onStatusUpdate(status) {

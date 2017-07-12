@@ -89,6 +89,9 @@ test(
                 expect(names).toContain('package.json');
               });
           },
+          onDirectoryCreated(directoryPath) {
+            console.log(`${directoryPath} created`);
+          },
           onFileUploaded(filePath) {
             console.log(`${filePath} uploaded`);
           },

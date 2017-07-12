@@ -23,9 +23,13 @@ const defaultHandlers = {
   beforeClosingConnection() {
     return Promise.resolve();
   },
+  beforeDirectoriesCreation() {
+    return Promise.resolve();
+  },
   beforeUpload() {
     return Promise.resolve();
   },
+  onDirectoryCreated() {},
   onFileUploaded() {},
   onStatusUpdate() {},
 };
@@ -33,7 +37,9 @@ const defaultHandlers = {
 const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
   const {
     beforeClosingConnection,
+    beforeDirectoriesCreation,
     beforeUpload,
+    onDirectoryCreated,
     onFileUploaded,
     onStatusUpdate: updateStatus,
   } = Object.assign(defaultHandlers, handlers);
@@ -111,30 +117,28 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
       const remoteDirectory = path.basename(remotePath);
       const leaveDirectories = getLeaveDirectories(filesToUpload);
 
-      return ftpClient
-        .cwd(path.dirname(remotePath))
-        .then(() => ftpClient.rmdir(remoteDirectory, true))
-        .then(() => ftpClient.mkdir(remoteDirectory))
-        .then(() => ftpClient.cwd(remoteDirectory))
-        .then(() =>
-          Promise.all(
-            leaveDirectories.map(directory => ftpClient.mkdir(directory, true))
-          )
-        )
-        .then(() => beforeUpload(ftpClient, filesToUpload))
-        .then(() => {
-          updateStatus('uploading');
-          return Promise.all(
-            filesToUpload.map(filePath =>
-              ftpClient
-                .put(path.join(packageDeploymentDirectory, filePath), filePath)
-                .then(() => {
-                  onFileUploaded(filePath);
-                })
-            )
-          );
-        })
-        .then(() =>
+      const operations = [
+        () => ftpClient.cwd(path.dirname(remotePath)),
+        () => {
+          updateStatus(`clearing directory ${remoteDirectory}`);
+          return ftpClient
+            .rmdir(remoteDirectory, true)
+            .then(() => ftpClient.mkdir(remoteDirectory));
+        },
+        () => ftpClient.cwd(remoteDirectory),
+        () => beforeDirectoriesCreation(ftpClient, leaveDirectories),
+        ...leaveDirectories.map(directoryPath => () =>
+          ftpClient
+            .mkdir(directoryPath, true)
+            .then(() => onDirectoryCreated(directoryPath))
+        ),
+        () => beforeUpload(ftpClient, filesToUpload),
+        ...filesToUpload.map(filePath => () =>
+          ftpClient
+            .put(path.join(packageDeploymentDirectory, filePath), filePath)
+            .then(() => onFileUploaded(filePath))
+        ),
+        () =>
           beforeClosingConnection(ftpClient)
             .catch(err => {
               updateStatus('error while deploying');
@@ -144,8 +148,13 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
             .then(() => {
               ftpClient.end();
               return fse.remove(deploymentDirectory);
-            })
-        );
+            }),
+      ];
+
+      return operations.reduce(
+        (sequence, operation) => sequence.then(operation),
+        Promise.resolve()
+      );
     }
   );
 
