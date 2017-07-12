@@ -64,7 +64,7 @@ const getLeaveDirectories = filePaths => {
       const falseLeaf = currentLeaves.find(
         potentialLeaf =>
           directory.length > potentialLeaf.length &&
-          directory.startsWith(potentialLeaf)
+          directory.startsWith(`${potentialLeaf}/`)
       );
       // eslint-disable-next-line no-undefined
       if (falseLeaf === undefined) {
