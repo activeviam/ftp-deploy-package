@@ -11,9 +11,9 @@ const recursiveReadDir = require('recursive-readdir');
 
 const {name: packageName} = require('./package.json');
 const {
+  copySourceFiles,
   createFtpClient,
   getLeaveDirectories,
-  isFileUsefulAtRuntime,
   normalizePathToLinux,
 } = require('./utils');
 
@@ -40,10 +40,6 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
 
   updateStatus(`starting deployment of ${packageDirectory}`);
 
-  const getSourceFiles = fse
-    .readJson(path.join(packageDirectory, 'package.json'))
-    .then(packageObj => packageObj.files.concat('package.json'));
-
   const createDeploymentDirectory = mkdtemp(
     path.join(os.tmpdir(), `${packageName}-`)
   ).then(deploymentDirectory => {
@@ -51,34 +47,35 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
     return deploymentDirectory;
   });
 
-  const getFilesToUpload = Promise.all([
-    getSourceFiles,
-    createDeploymentDirectory,
-  ]).then(([sourceFiles, deploymentDirectory]) =>
-    Promise.all(
-      sourceFiles.map(filePath =>
-        fse.copy(
-          path.join(packageDirectory, filePath),
-          path.join(deploymentDirectory, filePath)
-        )
-      )
-    )
-      .then(() => {
-        updateStatus('installing npm dependencies');
-        return execa('npm', ['install', '--production'], {
-          cwd: deploymentDirectory,
-        });
+  const copySourceFilesToDeploymentDirectory = createDeploymentDirectory.then(
+    deploymentDirectory =>
+      copySourceFiles(packageDirectory, deploymentDirectory)
+  );
+
+  const getFilesToUpload = copySourceFilesToDeploymentDirectory.then(
+    ({directory: packageDeploymentDirectory, filePaths: sourceFilePaths}) => {
+      updateStatus('installing npm dependencies');
+      return execa('npm', ['install', '--production', '--no-package-lock'], {
+        cwd: packageDeploymentDirectory,
       })
-      .then(() =>
-        recursiveReadDir(path.join(deploymentDirectory, 'node_modules'))
-      )
-      .then(nodeModulesFiles =>
-        nodeModulesFiles
-          .filter(isFileUsefulAtRuntime)
-          .map(filePath => path.relative(deploymentDirectory, filePath))
-      )
-      .then(usefulNodeModulesFile => sourceFiles.concat(usefulNodeModulesFile))
-      .then(filePaths => filePaths.map(normalizePathToLinux))
+        .then(() =>
+          recursiveReadDir(
+            path.join(packageDeploymentDirectory, 'node_modules')
+          )
+        )
+        .then(nodeModulesFiles =>
+          nodeModulesFiles
+            // eslint-disable-next-line no-sync
+            .filter(filePath => fs.lstatSync(filePath).isFile())
+            .map(filePath =>
+              path.relative(packageDeploymentDirectory, filePath)
+            )
+        )
+        .then(usefulNodeModulesFile =>
+          sourceFilePaths.concat(usefulNodeModulesFile)
+        )
+        .then(filePaths => filePaths.map(normalizePathToLinux));
+    }
   );
 
   const ftpConnect = Promise.resolve().then(() => {
@@ -96,51 +93,61 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
 
   const upload = Promise.all([
     createDeploymentDirectory,
+    copySourceFilesToDeploymentDirectory,
     getFilesToUpload,
     ftpConnect,
-  ]).then(([deploymentDirectory, filesToUpload, ftpClient]) => {
-    updateStatus('preparing remote directory structure');
+  ]).then(
+    (
+      [
+        deploymentDirectory,
+        {directory: packageDeploymentDirectory},
+        filesToUpload,
+        ftpClient,
+      ]
+    ) => {
+      updateStatus('preparing remote directory structure');
 
-    const remotePath = ftpConfig.path;
-    const remoteDirectory = path.basename(remotePath);
-    const leaveDirectories = getLeaveDirectories(filesToUpload);
+      const remotePath = ftpConfig.path;
+      const remoteDirectory = path.basename(remotePath);
+      const leaveDirectories = getLeaveDirectories(filesToUpload);
 
-    return ftpClient
-      .cwd(path.dirname(remotePath))
-      .then(() => ftpClient.rmdir(remoteDirectory, true))
-      .then(() => ftpClient.mkdir(remoteDirectory))
-      .then(() => ftpClient.cwd(remoteDirectory))
-      .then(() =>
-        Promise.all(
-          leaveDirectories.map(directory => ftpClient.mkdir(directory, true))
-        )
-      )
-      .then(() => beforeUpload(ftpClient, filesToUpload))
-      .then(() => {
-        updateStatus('uploading');
-        return Promise.all(
-          filesToUpload.map(filePath =>
-            ftpClient
-              .put(path.join(deploymentDirectory, filePath), filePath)
-              .then(() => {
-                onFileUploaded(filePath);
-              })
+      return ftpClient
+        .cwd(path.dirname(remotePath))
+        .then(() => ftpClient.rmdir(remoteDirectory, true))
+        .then(() => ftpClient.mkdir(remoteDirectory))
+        .then(() => ftpClient.cwd(remoteDirectory))
+        .then(() =>
+          Promise.all(
+            leaveDirectories.map(directory => ftpClient.mkdir(directory, true))
           )
+        )
+        .then(() => beforeUpload(ftpClient, filesToUpload))
+        .then(() => {
+          updateStatus('uploading');
+          return Promise.all(
+            filesToUpload.map(filePath =>
+              ftpClient
+                .put(path.join(packageDeploymentDirectory, filePath), filePath)
+                .then(() => {
+                  onFileUploaded(filePath);
+                })
+            )
+          );
+        })
+        .then(() =>
+          beforeClosingConnection(ftpClient)
+            .catch(err => {
+              updateStatus('error while deploying');
+              // eslint-disable-next-line no-console
+              console.error(err);
+            })
+            .then(() => {
+              ftpClient.end();
+              return fse.remove(deploymentDirectory);
+            })
         );
-      })
-      .then(() =>
-        beforeClosingConnection(ftpClient)
-          .catch(err => {
-            updateStatus('error while deploying');
-            // eslint-disable-next-line no-console
-            console.error(err);
-          })
-          .then(() => {
-            ftpClient.end();
-            return fse.remove(deploymentDirectory);
-          })
-      );
-  });
+    }
+  );
 
   return upload;
 };

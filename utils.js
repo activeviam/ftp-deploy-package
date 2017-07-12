@@ -1,10 +1,31 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 
+const decompress = require('decompress');
 const promisify = require('es6-promisify');
+const execa = require('execa');
+const fse = require('fs-extra');
 const FtpClient = require('ftp');
+
+const packageDirectoryInTgz = 'package';
+const copySourceFiles = (packageDirectory, distDirectory) =>
+  execa('npm', ['pack'], {
+    cwd: packageDirectory,
+  })
+    .then(({stdout: tgzFilename}) => {
+      const tgzPath = path.join(packageDirectory, tgzFilename);
+      return decompress(tgzPath, distDirectory).then(files =>
+        fse.remove(tgzPath).then(() => files)
+      );
+    })
+    .then(files =>
+      files.map(file => path.relative(packageDirectoryInTgz, file.path))
+    )
+    .then(filePaths => ({
+      directory: path.join(distDirectory, packageDirectoryInTgz),
+      filePaths,
+    }));
 
 const createFtpClient = () => {
   const clientWithCallbacks = new FtpClient();
@@ -62,20 +83,11 @@ const getLeaveDirectories = filePaths => {
   return Array.from(leaves);
 };
 
-const isFileUsefulAtRuntime = filePath =>
-  // Only keep files...
-  // eslint-disable-next-line no-sync
-  fs.lstatSync(filePath).isFile() &&
-  // That should be there...
-  !filePath.includes('/test/') &&
-  // And useful at run time.
-  ['.js', '.json'].includes(path.extname(filePath));
-
 const normalizePathToLinux = filePath => filePath.replace(/\\/g, '/');
 
 module.exports = {
+  copySourceFiles,
   createFtpClient,
   getLeaveDirectories,
-  isFileUsefulAtRuntime,
   normalizePathToLinux,
 };

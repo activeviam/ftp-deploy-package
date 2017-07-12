@@ -5,6 +5,7 @@
   },
   "description": "Deploy an npm package with its production dependencies through FTP",
   "dependencies": {
+    "decompress": "^4.2.0",
     "es6-promisify": "^5.0.0",
     "execa": "^0.7.0",
     "fs-extra": "^3.0.1",
