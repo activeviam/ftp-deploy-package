@@ -4,7 +4,7 @@ This package is made to deploy an npm package to a remote server through FTP. It
 
 # Installation
 
-Add this package to your [devDependencies](https://docs.npmjs.com/files/package.json#devdependencies): `npm install --save-dev fetch-github-app`.
+Add this package to your [devDependencies](https://docs.npmjs.com/files/package.json#devdependencies): `npm install --save-dev ftp-deploy-package`.
 
 # Usage
 
