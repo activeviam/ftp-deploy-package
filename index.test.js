@@ -6,8 +6,8 @@
 const path = require('path');
 
 const execa = require('execa');
-const dotenv = require('dotenv');
 const fse = require('fs-extra');
+const ftpd = require('ftpd');
 
 const ftpDeployPackage = require('.');
 
@@ -18,27 +18,54 @@ const packageMockPackageJsonPath = path.join(
 );
 const packageMockIndexJsContent = '// No content.\n';
 
-const envToConfigMapping = {
-  FTP_HOST: 'host',
-  FTP_PASSWORD: 'password',
-  FTP_REMOTE_PATH: 'path',
-  FTP_USER: 'user',
+const ftpConfig = {
+  host: '127.0.0.1',
+  password: 'the-password',
+  path: 'ftp-server',
+  port: '7002',
+  user: 'the-user',
 };
 
-const ftpConfig = {};
+// eslint-disable-next-line init-declarations
+let server;
 
-beforeAll(() => {
-  dotenv.config();
-
-  Object.keys(envToConfigMapping).forEach(envKey => {
-    const configKey = envToConfigMapping[envKey];
-
-    if (!process.env.hasOwnProperty(envKey)) {
-      throw new Error(`Missing environment variable ${envKey}.`);
-    }
-
-    ftpConfig[configKey] = process.env[envKey];
+beforeEach(() => {
+  server = new ftpd.FtpServer(ftpConfig.host, {
+    getInitialCwd() {
+      return '/';
+    },
+    getRoot() {
+      return process.cwd();
+    },
   });
+
+  server.on('error', error => {
+    console.log('FTP Server error:', error);
+  });
+
+  server.on('client:connected', connection => {
+    connection.on('command:user', (user, success, failure) => {
+      if (user === ftpConfig.user) {
+        success();
+      } else {
+        failure();
+      }
+    });
+
+    connection.on('command:pass', (password, success, failure) => {
+      if (password === ftpConfig.password) {
+        success(ftpConfig.user);
+      } else {
+        failure();
+      }
+    });
+  });
+
+  server.listen(ftpConfig.port);
+});
+
+afterEach(() => {
+  server.close();
 });
 
 const timeoutInMilliseconds = 60000;
@@ -88,15 +115,6 @@ test(
               .then(names => {
                 expect(names).toContain('package.json');
               });
-          },
-          onDirectoryCreated(directoryPath) {
-            console.log(`${directoryPath} created`);
-          },
-          onFileUploaded(filePath) {
-            console.log(`${filePath} uploaded`);
-          },
-          onStatusUpdate(status) {
-            console.log(`status: ${status}`);
           },
         })
       )
