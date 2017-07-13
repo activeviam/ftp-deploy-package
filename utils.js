@@ -13,7 +13,10 @@ const copySourceFiles = (packageDirectory, distDirectory) =>
   execa('npm', ['pack'], {
     cwd: packageDirectory,
   })
-    .then(({stdout: tgzFilename}) => {
+    .then(({stdout}) => {
+      const lines = stdout.split('\n');
+      // eslint-disable-next-line no-magic-numbers
+      const tgzFilename = lines[lines.length - 1];
       const tgzPath = path.join(packageDirectory, tgzFilename);
       return decompress(tgzPath, distDirectory).then(files =>
         fse.remove(tgzPath).then(() => files)
