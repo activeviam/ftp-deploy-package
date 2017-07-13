@@ -122,12 +122,16 @@ const ftpDeployPackage = (packageDirectory, ftpConfig, handlers = {}) => {
 
       const operations = [
         () => ftpClient.cwd(path.dirname(remotePath)),
-        () => {
-          updateStatus(`clearing directory ${remoteDirectory}`);
-          return ftpClient
-            .rmdir(remoteDirectory, true)
-            .then(() => ftpClient.mkdir(remoteDirectory));
-        },
+        () =>
+          ftpClient
+            .list()
+            .then(list =>
+              (list.some(({name}) => name === remoteDirectory)
+                ? ftpClient.rmdir(remoteDirectory, true)
+                : Promise.resolve()).then(() =>
+                ftpClient.mkdir(remoteDirectory)
+              )
+            ),
         () => ftpClient.cwd(remoteDirectory),
         () => beforeDirectoriesCreation(ftpClient, leaveDirectories),
         ...leaveDirectories.map(directoryPath => () =>
