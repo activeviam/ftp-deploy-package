@@ -9,6 +9,13 @@ This package is made to deploy an npm package to a remote server through FTP. It
 
 Add this package to your [devDependencies](https://docs.npmjs.com/files/package.json#devdependencies): `npm install --save-dev ftp-deploy-package`.
 
+## Deprecation notice
+
+We were using this package to deploy Azure Functions as detailed in this [blog post](https://activeviam.com/blog/setting-up-and-deploying-a-github-app-in-the-azure-cloud/).
+Azure Functions can now be deployed with a simple [zip push](https://docs.microsoft.com/en-us/azure/azure-functions/deployment-zip-push).
+The same feature is available with [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/nodejs-create-deployment-pkg.html).
+It means we don't need this npm package anymore so we will stop maintaining it.
+
 # Usage
 
 `ftp-deploy-package` package is a wrapper around [ftp](https://www.npmjs.com/package/ftp). You can thus pass it all the options accepted by its [`connect` method](https://www.npmjs.com/package/ftp#methods).
